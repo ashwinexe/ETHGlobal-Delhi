@@ -1,7 +1,7 @@
 // Backend API integration for SIWE endpoints
-// const API_BASE_URL =
-//   'https://conservative-annabela-starwiz-7-248cfee3.koyeb.app'
-const API_BASE_URL = 'http://192.168.1.170:3001'
+const API_BASE_URL =
+  'https://conservative-annabela-starwiz-7-248cfee3.koyeb.app'
+// const API_BASE_URL = 'http://192.168.1.170:3001'
 
 export const api = {
   // Generate a nonce for SIWE

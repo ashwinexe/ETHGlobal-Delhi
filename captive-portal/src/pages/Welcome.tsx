@@ -1,5 +1,7 @@
 import { useAccount, useDisconnect } from 'wagmi'
 import { useAppKit } from '@reown/appkit/react'
+import { useSiwe } from '../contexts/SiweContext'
+import PlanSelector from 'components/PlanSelector'
 
 // Dummy data for the stats table
 const statsData = [
@@ -41,35 +43,40 @@ const statsData = [
   }
 ]
 
+const hasPlan = false
+
+const formatAddress = (addr: string) => {
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'Active':
+      return 'text-green-400 bg-green-400/20'
+    case 'Good':
+      return 'text-blue-400 bg-blue-400/20'
+    case 'Excellent':
+      return 'text-purple-400 bg-purple-400/20'
+    default:
+      return 'text-gray-400 bg-gray-400/20'
+  }
+}
+
 export default function Welcome() {
-  const { address, isConnected } = useAccount()
-  const { disconnect } = useDisconnect()
+  const { isConnected } = useAccount()
+  const { isAuthenticated } = useSiwe()
   const { open } = useAppKit()
 
-  const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Active':
-        return 'text-green-400 bg-green-400/20'
-      case 'Good':
-        return 'text-blue-400 bg-blue-400/20'
-      case 'Excellent':
-        return 'text-purple-400 bg-purple-400/20'
-      default:
-        return 'text-gray-400 bg-gray-400/20'
-    }
-  }
-
-  if (!isConnected) {
+  if (!isConnected || !isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black">
         <div className="text-center">
-          <h2 className="mb-4 text-2xl font-bold text-white">Not Connected</h2>
+          <h2 className="mb-4 text-2xl font-bold text-white">
+            Not Authenticated
+          </h2>
           <p className="mb-6 text-gray-400">
-            Please connect your wallet to access this page.
+            Please connect your wallet and sign in with Ethereum to access this
+            page.
           </p>
           <button
             onClick={() => open()}
@@ -82,36 +89,16 @@ export default function Welcome() {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-black">
-      {/* Header */}
-      <div className="border-b border-gray-800 bg-gray-900">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white">
-                Welcome to Captive Portal
-              </h1>
-              <p className="text-gray-400">Your internet access dashboard</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-sm text-gray-400">Connected as</p>
-                <p className="font-mono text-white">
-                  {formatAddress(address!)}
-                </p>
-              </div>
-              <button
-                onClick={() => disconnect()}
-                className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-400 transition-colors hover:border-gray-600 hover:text-white"
-              >
-                Disconnect
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+  if (!hasPlan) {
+    return (
+      <ConnectedPage>
+        <PlanSelector />
+      </ConnectedPage>
+    )
+  }
 
+  return (
+    <ConnectedPage>
       {/* Main Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Stats Table */}
@@ -208,6 +195,51 @@ export default function Welcome() {
           </div>
         </div>
       </div>
+    </ConnectedPage>
+  )
+}
+
+const ConnectedPage = ({ children }: { children: React.ReactNode }) => {
+  const { disconnect } = useDisconnect()
+  const { address } = useAccount()
+  const { signOut } = useSiwe()
+
+  const handleSignOut = async () => {
+    await signOut()
+    disconnect()
+  }
+
+  return (
+    <div className="min-h-screen bg-black">
+      {/* Header */}
+      <div className="border-b border-gray-800 bg-black">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white">
+                Welcome to Captive Portal
+              </h1>
+              <p className="text-gray-400">Your internet access dashboard</p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="text-right">
+                <p className="text-sm text-gray-400">Signed in as</p>
+                <p className="font-mono text-white">
+                  {formatAddress(address!)}
+                </p>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-400 transition-colors hover:border-gray-600 hover:text-white"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {children}
     </div>
   )
 }

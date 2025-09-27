@@ -1,4 +1,5 @@
 import { AppKitProvider } from './AppKitProvider'
+import { SiweProvider } from '../contexts/SiweContext'
 import {
   BrowserRouter as Router,
   Routes,
@@ -8,28 +9,29 @@ import {
 import Login from '../pages/Login'
 import Welcome from '../pages/Welcome'
 import { useAccount } from 'wagmi'
+import { useSiwe } from '../contexts/SiweContext'
 import Loading from './Loading'
 
 function App() {
   return (
     <AppKitProvider>
-      <Router>
-        <ManagedRoutes />
-      </Router>
+      <SiweProvider>
+        <Router>
+          <ManagedRoutes />
+        </Router>
+      </SiweProvider>
     </AppKitProvider>
   )
 }
 
 const ManagedRoutes = () => {
   const { isConnected, isConnecting } = useAccount()
+  const { isAuthenticated, isLoading: siweLoading } = useSiwe()
 
-  const page = isConnecting ? (
-    <Loading />
-  ) : isConnected ? (
-    <Welcome />
-  ) : (
-    <Login />
-  )
+  const isLoading = isConnecting || siweLoading
+  const isLoggedIn = isConnected && isAuthenticated
+
+  const page = isLoading ? <Loading /> : isLoggedIn ? <Welcome /> : <Login />
 
   return (
     <Routes>

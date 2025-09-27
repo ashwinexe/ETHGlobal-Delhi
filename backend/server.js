@@ -40,7 +40,8 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax',
   }
 }));
 
@@ -82,7 +83,7 @@ app.get('/auth/nonce', (req, res) => {
 // Verify SIWE message and authenticate user
 app.post('/auth/verify', async (req, res) => {
   try {
-    const { message, signature } = req.body;
+    const { message, signature, nonce } = req.body;
 
     if (!message || !signature) {
       return res.status(400).json({ 
@@ -95,7 +96,7 @@ app.post('/auth/verify', async (req, res) => {
     const siweMessage = new SiweMessage(message);
     
     // Verify the message has the correct nonce
-    if (!req.session.nonce || siweMessage.nonce !== req.session.nonce) {
+    if (!nonce || siweMessage.nonce !== nonce) {
       return res.status(400).json({ 
         error: 'Invalid nonce',
         message: 'Nonce mismatch or missing session nonce'

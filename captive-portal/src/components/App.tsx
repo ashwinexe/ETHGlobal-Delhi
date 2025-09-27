@@ -8,6 +8,7 @@ import {
 import Login from '../pages/Login'
 import Welcome from '../pages/Welcome'
 import { useAccount } from 'wagmi'
+import Loading from './Loading'
 
 function App() {
   return (
@@ -20,13 +21,21 @@ function App() {
 }
 
 const ManagedRoutes = () => {
-  const { isConnected } = useAccount()
+  const { isConnected, isConnecting } = useAccount()
+
+  const page = isConnecting ? (
+    <Loading />
+  ) : isConnected ? (
+    <Welcome />
+  ) : (
+    <Login />
+  )
 
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/welcome" element={isConnected ? <Welcome /> : <Login />} />
+      <Route path="/welcome" element={page} />
     </Routes>
   )
 }

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIWE Test Client</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <script src="https://unpkg.com/siwe@2.1.4/dist/siwe.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        
+        .logout-btn { background-color: #dc3545; }
+        .logout-btn:hover { background-color: #c82333; }
+        
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+        }
+        
+        .hidden { display: none; }
+        
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 SIWE Test Client</h1>
+        <p>Test your Sign in with Ethereum implementation locally</p>
+        
+        <div id="status" class="status info">
+            Ready to test SIWE authentication
+        </div>
+        
+        <!-- Connection Section -->
+        <div class="section">
+            <h3>1. Connect Wallet</h3>
+            <button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
+            <div id="walletInfo" class="hidden">
+                <p><strong>Connected Address:</strong> <span id="walletAddress"></span></p>
+                <p><strong>Network:</strong> <span id="networkInfo"></span></p>
+            </div>
+        </div>
+        
+        <!-- Authentication Section -->
+        <div class="section">
+            <h3>2. SIWE Authentication</h3>
+            <button id="authBtn" onclick="authenticate()" disabled>Sign In with Ethereum</button>
+            <button id="logoutBtn" onclick="logout()" class="logout-btn hidden">Logout</button>
+            
+            <div id="authInfo" class="hidden">
+                <h4>Authentication Details:</h4>
+                <pre id="authDetails"></pre>
+            </div>
+        </div>
+        
+        <!-- API Testing Section -->
+        <div class="section">
+            <h3>3. API Testing</h3>
+            <button onclick="testHealth()">Test Health Endpoint</button>
+            <button onclick="testNonce()">Get Nonce</button>
+            <button onclick="testMe()" id="testMeBtn" disabled>Test /auth/me</button>
+            <button onclick="testProtected()" id="testProtectedBtn" disabled>Test Protected Route</button>
+            
+            <div id="apiResults">
+                <h4>API Response:</h4>
+                <pre id="apiResponse"></pre>
+            </div>
+        </div>
+        
+        <!-- Manual Testing Section -->
+        <div class="section">
+            <h3>4. Manual Testing</h3>
+            <p>Backend URL: <input type="text" id="backendUrl" value="http://localhost:3001" /></p>
+            <button onclick="updateBackendUrl()">Update Backend URL</button>
+        </div>
+    </div>
+
+    <script>
+        let provider = null;
+        let signer = null;
+        let userAddress = null;
+        let isAuthenticated = false;
+        let backendUrl = 'http://localhost:3001';
+        
+        // Update status display
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        // Update API response display
+        function updateApiResponse(data) {
+            document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+        }
+        
+        // Connect to MetaMask
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum === 'undefined') {
+                    throw new Error('MetaMask not installed');
+                }
+                
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                signer = provider.getSigner();
+                userAddress = await signer.getAddress();
+                
+                const network = await provider.getNetwork();
+                
+                document.getElementById('walletAddress').textContent = userAddress;
+                document.getElementById('networkInfo').textContent = `${network.name} (${network.chainId})`;
+                document.getElementById('walletInfo').classList.remove('hidden');
+                document.getElementById('authBtn').disabled = false;
+                
+                updateStatus(`Connected to ${userAddress}`, 'success');
+            } catch (error) {
+                updateStatus(`Connection failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Authenticate with SIWE
+        async function authenticate() {
+            try {
+                updateStatus('Starting SIWE authentication...', 'info');
+                
+                // Step 1: Get nonce from backend
+                const nonceResponse = await fetch(`${backendUrl}/auth/nonce`);
+                const nonceData = await nonceResponse.json();
+                
+                if (!nonceResponse.ok) {
+                    throw new Error(nonceData.message || 'Failed to get nonce');
+                }
+                
+                // Step 2: Create SIWE message
+                const domain = window.location.host;
+                const uri = window.location.origin;
+                const chainId = (await provider.getNetwork()).chainId;
+                
+                const siweMessage = new siwe.SiweMessage({
+                    domain,
+                    address: userAddress,
+                    statement: 'Sign in with Ethereum to the app.',
+                    uri,
+                    version: '1',
+                    chainId,
+                    nonce: nonceData.nonce
+                });
+                
+                const messageToSign = siweMessage.prepareMessage();
+                
+                // Step 3: Sign the message
+                const signature = await signer.signMessage(messageToSign);
+                
+                // Step 4: Verify with backend
+                const verifyResponse = await fetch(`${backendUrl}/auth/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include', // Important for session cookies
+                    body: JSON.stringify({
+                        message: messageToSign,
+                        signature: signature
+                    })
+                });
+                
+                const verifyData = await verifyResponse.json();
+                
+                if (verifyResponse.ok && verifyData.success) {
+                    isAuthenticated = true;
+                    document.getElementById('authBtn').classList.add('hidden');
+                    document.getElementById('logoutBtn').classList.remove('hidden');
+                    document.getElementById('testMeBtn').disabled = false;
+                    document.getElementById('testProtectedBtn').disabled = false;
+                    
+                    document.getElementById('authDetails').textContent = JSON.stringify(verifyData.user, null, 2);
+                    document.getElementById('authInfo').classList.remove('hidden');
+                    
+                    updateStatus('Authentication successful!', 'success');
+                } else {
+                    throw new Error(verifyData.message || 'Authentication failed');
+                }
+                
+            } catch (error) {
+                updateStatus(`Authentication failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Logout
+        async function logout() {
+            try {
+                const response = await fetch(`${backendUrl}/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    isAuthenticated = false;
+                    document.getElementById('authBtn').classList.remove('hidden');
+                    document.getElementById('logoutBtn').classList.add('hidden');
+                    document.getElementById('testMeBtn').disabled = true;
+                    document.getElementById('testProtectedBtn').disabled = true;
+                    document.getElementById('authInfo').classList.add('hidden');
+                    
+                    updateStatus('Logged out successfully', 'info');
+                } else {
+                    throw new Error(data.message || 'Logout failed');
+                }
+            } catch (error) {
+                updateStatus(`Logout failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test health endpoint
+        async function testHealth() {
+            try {
+                const response = await fetch(`${backendUrl}/health`);
+                const data = await response.json();
+                updateApiResponse(data);
+                updateStatus('Health check completed', 'success');
+            } catch (error) {
+                updateApiResponse({ error: error.message });
+                updateStatus(`Health check failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test nonce endpoint
+        async function testNonce() {
+            try {
+                const response = await fetch(`${backendUrl}/auth/nonce`);
+                const data = await response.json();
+                updateApiResponse(data);
+                updateStatus('Nonce test completed', 'success');
+            } catch (error) {
+                updateApiResponse({ error: error.message });
+                updateStatus(`Nonce test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test /auth/me endpoint
+        async function testMe() {
+            try {
+                const response = await fetch(`${backendUrl}/auth/me`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                updateApiResponse(data);
+                updateStatus('Auth me test completed', 'success');
+            } catch (error) {
+                updateApiResponse({ error: error.message });
+                updateStatus(`Auth me test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test protected route
+        async function testProtected() {
+            try {
+                const response = await fetch(`${backendUrl}/protected`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                updateApiResponse(data);
+                updateStatus('Protected route test completed', 'success');
+            } catch (error) {
+                updateApiResponse({ error: error.message });
+                updateStatus(`Protected route test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Update backend URL
+        function updateBackendUrl() {
+            backendUrl = document.getElementById('backendUrl').value;
+            updateStatus(`Backend URL updated to: ${backendUrl}`, 'info');
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            updateStatus('Ready to test SIWE authentication. Make sure your backend server is running!', 'info');
+        });
+    </script>
+</body>
+</html>
